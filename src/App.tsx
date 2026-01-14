@@ -59,7 +59,6 @@ const LOGO_LIGHT = "https://www.guebly.com.br/guebly.png"; // só ícone
 export default function App() {
   const { toasts, addToast } = useToast();
 
-  // Theme
   const [theme, setTheme] = useState<"dark" | "light">(() => {
     const saved = localStorage.getItem("guebly_theme");
     if (saved === "light" || saved === "dark") return saved;
@@ -128,13 +127,10 @@ export default function App() {
       className="min-h-screen overflow-x-hidden selection:bg-purple-500/30"
       style={{ background: "var(--bg)", color: "var(--text)" }}
     >
-      {/* Toasts ficam acima do ThemeToggle (ajustado em src/lib/toast.tsx) */}
       <ToastContainer toasts={toasts} />
-
-      {/* ThemeToggle FIXO NO BOTTOM-RIGHT */}
       <ThemeToggle theme={theme} setTheme={setTheme} />
 
-      {/* Background glows FIXED (não empurra layout / não “pula”) */}
+      {/* Background glows FIXED */}
       <div className="pointer-events-none fixed inset-0 -z-10">
         <div
           className="absolute top-[-180px] right-[-180px] w-[520px] h-[520px] md:w-[920px] md:h-[920px] rounded-full blur-[140px]"
@@ -155,25 +151,27 @@ export default function App() {
             borderColor: "var(--panelBorder)",
           }}
         >
-          <div className="px-6 md:px-10 py-5 max-w-[1920px] mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-5">
+          {/* troquei pra grid responsivo */}
+          <div className="px-4 sm:px-6 md:px-10 py-4 max-w-[1920px] mx-auto grid grid-cols-1 lg:grid-cols-2 gap-4 items-center">
+            {/* Left */}
+            <div className="flex items-center gap-4 min-w-0">
               <img
                 src={logoSrc}
                 alt="Guebly"
-                className={`w-auto object-contain drop-shadow-2xl ${
-                  theme === "dark" ? "h-14 md:h-16" : "h-12 md:h-14"
+                className={`w-auto object-contain drop-shadow-2xl shrink-0 ${
+                  theme === "dark" ? "h-12 sm:h-14" : "h-10 sm:h-12"
                 }`}
                 width={theme === "dark" ? 220 : 64}
                 height={64}
                 loading="eager"
               />
 
-              <div className="leading-none">
-                <h1 className="text-lg md:text-xl font-black tracking-tighter opacity-90">
+              <div className="leading-none min-w-0">
+                <h1 className="text-base sm:text-lg md:text-xl font-black tracking-tighter opacity-90 whitespace-nowrap">
                   TEXT<span className="text-blue-500">.FORMATTER</span>
                 </h1>
 
-                {/* BADGES (com estilo melhor) + REMOVIDO LOCAL • OFFLINE */}
+                {/* badges quebrando certo */}
                 <div className="mt-2 flex flex-wrap gap-2 items-center">
                   <Badge>OPEN-SOURCE</Badge>
                   <Badge>SEM COLETA</Badge>
@@ -182,27 +180,28 @@ export default function App() {
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center justify-center gap-3">
+            {/* Right: controls */}
+            <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center justify-start lg:justify-end gap-2 sm:gap-3">
               {/* Platform select */}
               <div
-                className="flex items-center gap-2 px-4 py-3 rounded-2xl border"
+                className="flex items-center justify-between sm:justify-start gap-2 px-4 py-3 rounded-2xl border w-full sm:w-auto"
                 style={{
                   background: "var(--panel)",
                   borderColor: "var(--panelBorder)",
                 }}
               >
                 <span
-                  className="text-[10px] font-bold uppercase tracking-widest"
+                  className="text-[10px] font-bold uppercase tracking-widest whitespace-nowrap"
                   style={{ color: "var(--muted)" }}
                 >
                   PLATAFORMA
                 </span>
 
-                <div className="relative">
+                <div className="relative flex-1 sm:flex-none min-w-0">
                   <select
                     value={platform}
                     onChange={(e) => setPlatform(e.target.value as PlatformKey)}
-                    className="appearance-none bg-transparent border rounded-xl px-4 py-2 pr-9 text-sm font-black outline-none transition"
+                    className="w-full sm:w-auto appearance-none bg-transparent border rounded-xl px-4 py-2 pr-9 text-sm font-black outline-none transition"
                     style={{
                       borderColor: "var(--panelBorder)",
                       color: "var(--text)",
@@ -224,80 +223,68 @@ export default function App() {
                 </div>
               </div>
 
-              {/* LIMPAR */}
-              <button
-                onClick={onClear}
-                className="px-5 py-3 rounded-2xl font-black text-xs tracking-widest transition active:scale-95 flex items-center gap-2 border"
-                style={{
-                  background: "var(--panel)",
-                  borderColor: "var(--panelBorder)",
-                  color: "var(--muted)",
-                }}
-              >
-                <Eraser size={16} /> LIMPAR
-              </button>
+              {/* Buttons row (mobile: 2 col) */}
+              <div className="grid grid-cols-2 gap-2 w-full sm:w-auto">
+                <button
+                  onClick={onClear}
+                  className="w-full px-4 sm:px-5 py-3 rounded-2xl font-black text-[11px] sm:text-xs tracking-widest transition active:scale-95 flex items-center justify-center gap-2 border"
+                  style={{
+                    background: "var(--panel)",
+                    borderColor: "var(--panelBorder)",
+                    color: "var(--muted)",
+                  }}
+                >
+                  <Eraser size={16} /> <span className="truncate">LIMPAR</span>
+                </button>
 
-              {/* EXECUTAR (MESMO TAMANHO DO LIMPAR) */}
-              <button
-                onClick={onExecute}
-                className="
-    relative
-    px-5 py-3
-    rounded-2xl
-    font-black text-xs tracking-widest
-    flex items-center gap-2
-    border
-    transition
-    active:scale-95
-    hover:-translate-y-[1px]
-    select-none
-    overflow-hidden
-  "
-                style={{
-                  background:
-                    theme === "dark"
-                      ? "linear-gradient(180deg, rgba(15,23,42,0.85), rgba(2,6,23,0.95))"
-                      : "linear-gradient(180deg, #ffffff, #f1f5f9)",
-                  borderColor:
-                    theme === "dark"
-                      ? "rgba(255,255,255,0.14)"
-                      : "rgba(15,23,42,0.14)",
-                  color: theme === "dark" ? "#fff" : "#0f172a",
-                  boxShadow:
-                    theme === "dark"
-                      ? `
-          0 12px 28px rgba(0,0,0,0.45),
-          inset 0 0 0 1px rgba(255,255,255,0.04)
-        `
-                      : `
-          0 10px 24px rgba(15,23,42,0.12),
-          inset 0 0 0 1px rgba(15,23,42,0.04)
-        `,
-                }}
-              >
-                {/* highlight sutil */}
-                <span
-                  className="absolute inset-0 opacity-0 hover:opacity-100 transition"
+                <button
+                  onClick={onExecute}
+                  className="w-full relative px-4 sm:px-5 py-3 rounded-2xl font-black text-[11px] sm:text-xs tracking-widest flex items-center justify-center gap-2 border transition active:scale-95 hover:-translate-y-[1px] select-none overflow-hidden"
                   style={{
                     background:
                       theme === "dark"
-                        ? "radial-gradient(500px circle at 20% 0%, rgba(59,130,246,0.18), transparent 40%)"
-                        : "radial-gradient(500px circle at 20% 0%, rgba(59,130,246,0.14), transparent 40%)",
+                        ? "linear-gradient(180deg, rgba(15,23,42,0.85), rgba(2,6,23,0.95))"
+                        : "linear-gradient(180deg, #ffffff, #f1f5f9)",
+                    borderColor:
+                      theme === "dark"
+                        ? "rgba(255,255,255,0.14)"
+                        : "rgba(15,23,42,0.14)",
+                    color: theme === "dark" ? "#fff" : "#0f172a",
+                    boxShadow:
+                      theme === "dark"
+                        ? `
+          0 12px 28px rgba(0,0,0,0.45),
+          inset 0 0 0 1px rgba(255,255,255,0.04)
+        `
+                        : `
+          0 10px 24px rgba(15,23,42,0.12),
+          inset 0 0 0 1px rgba(15,23,42,0.04)
+        `,
                   }}
-                />
+                >
+                  <span
+                    className="absolute inset-0 opacity-0 hover:opacity-100 transition"
+                    style={{
+                      background:
+                        theme === "dark"
+                          ? "radial-gradient(500px circle at 20% 0%, rgba(59,130,246,0.18), transparent 40%)"
+                          : "radial-gradient(500px circle at 20% 0%, rgba(59,130,246,0.14), transparent 40%)",
+                    }}
+                  />
 
-                <span className="relative flex items-center gap-2">
-                  <PlayCircle size={16} />
-                  EXECUTAR
-                </span>
-              </button>
+                  <span className="relative flex items-center gap-2">
+                    <PlayCircle size={16} />
+                    <span className="truncate">EXECUTAR</span>
+                  </span>
+                </button>
+              </div>
             </div>
           </div>
         </header>
 
-        <main className="p-6 md:p-12 max-w-[1920px] mx-auto space-y-8 animate-in fade-in duration-500">
+        <main className="p-4 sm:p-6 md:p-12 max-w-[1920px] mx-auto space-y-6 md:space-y-8 animate-in fade-in duration-500">
           <section
-            className="border rounded-[30px] p-6 md:p-8 shadow-2xl relative overflow-hidden"
+            className="border rounded-[26px] md:rounded-[30px] p-4 sm:p-6 md:p-8 shadow-2xl relative overflow-hidden"
             style={{
               background: "var(--panel)",
               borderColor: "var(--panelBorder)",
@@ -312,8 +299,8 @@ export default function App() {
             />
 
             <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-6 gap-3">
-              <div>
-                <h2 className="text-xl md:text-2xl font-black flex items-center gap-3">
+              <div className="min-w-0">
+                <h2 className="text-lg sm:text-xl md:text-2xl font-black flex items-center gap-3">
                   {PLATFORM[platform].icon} Central de Formatação
                 </h2>
                 <p
@@ -325,9 +312,8 @@ export default function App() {
                 </p>
               </div>
 
-              {/* DIVIDIR (explicação pronta no title) */}
               <div
-                className="flex items-center gap-3 px-4 py-3 rounded-2xl border"
+                className="w-full md:w-auto flex items-center justify-between md:justify-start gap-3 px-4 py-3 rounded-2xl border"
                 style={{
                   background:
                     "color-mix(in srgb, var(--panel) 65%, transparent)",
@@ -336,7 +322,7 @@ export default function App() {
                 title="DIVIDIR: quebra a saída em blocos com no máximo X caracteres (ideal pra colar em partes no app)."
               >
                 <label
-                  className="flex items-center gap-2 text-xs font-black"
+                  className="flex items-center gap-2 text-xs font-black whitespace-nowrap"
                   style={{ color: "var(--muted)" }}
                 >
                   <input
@@ -354,7 +340,7 @@ export default function App() {
                   type="number"
                   min={200}
                   max={10000}
-                  className="w-28 rounded-xl px-3 py-2 text-sm font-black outline-none transition border"
+                  className="w-24 sm:w-28 rounded-xl px-3 py-2 text-sm font-black outline-none transition border"
                   style={{
                     background:
                       "color-mix(in srgb, var(--panel) 55%, transparent)",
@@ -365,7 +351,7 @@ export default function App() {
                 />
 
                 <span
-                  className="text-[10px] font-bold"
+                  className="hidden sm:inline text-[10px] font-bold whitespace-nowrap"
                   style={{ color: "var(--muted)" }}
                 >
                   quebra em partes
@@ -373,10 +359,10 @@ export default function App() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
               {/* Input */}
               <div
-                className="border p-6 rounded-2xl shadow-lg"
+                className="border p-4 sm:p-6 rounded-2xl shadow-lg"
                 style={{
                   background:
                     "color-mix(in srgb, var(--panel) 65%, transparent)",
@@ -396,7 +382,7 @@ export default function App() {
                 </div>
 
                 <textarea
-                  className="w-full min-h-[420px] rounded-xl px-4 py-4 text-xs font-mono outline-none transition resize-y border"
+                  className="w-full min-h-[360px] sm:min-h-[420px] rounded-xl px-4 py-4 text-xs font-mono outline-none transition resize-y border"
                   style={{
                     background:
                       "color-mix(in srgb, var(--bg) 70%, transparent)",
@@ -419,18 +405,20 @@ export default function App() {
 
               {/* Output */}
               <div
-                className="border p-6 rounded-2xl shadow-lg"
+                className="border p-4 sm:p-6 rounded-2xl shadow-lg"
                 style={{
                   background:
                     "color-mix(in srgb, var(--panel) 65%, transparent)",
                   borderColor: "var(--panelBorder)",
                 }}
               >
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-bold text-sm tracking-wide uppercase flex items-center gap-2">
-                    Saída • {PLATFORM[platform].label}
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+                  <h3 className="font-bold text-sm tracking-wide uppercase flex items-center gap-2 min-w-0">
+                    <span className="truncate">
+                      Saída • {PLATFORM[platform].label}
+                    </span>
                     <span
-                      className="text-[10px] font-black px-2 py-1 rounded border"
+                      className="text-[10px] font-black px-2 py-1 rounded border shrink-0"
                       style={{
                         borderColor: isStale
                           ? "rgba(148,163,184,0.30)"
@@ -445,12 +433,13 @@ export default function App() {
                     </span>
                   </h3>
 
-                  <div className="flex items-center gap-2">
+                  {/* copy buttons: mobile stack */}
+                  <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 w-full sm:w-auto">
                     <button
                       onClick={() =>
                         copyText(chunks[0] || "", "Copiado (1º bloco).")
                       }
-                      className="px-3 py-2 rounded-xl text-[11px] font-black transition flex items-center gap-2 border"
+                      className="w-full sm:w-auto px-3 py-2 rounded-xl text-[11px] font-black transition flex items-center justify-center gap-2 border"
                       style={{
                         background:
                           "color-mix(in srgb, var(--bg) 75%, transparent)",
@@ -459,14 +448,12 @@ export default function App() {
                       }}
                       disabled={!executed}
                     >
-                      <Copy size={14} /> 1º BLOCO
+                      <Copy size={14} /> <span className="truncate">1º</span>
                     </button>
 
                     <button
-                      onClick={() =>
-                        copyText(executed, "Copiado (sem dividir).")
-                      }
-                      className="px-3 py-2 rounded-xl text-[11px] font-black transition flex items-center gap-2 border"
+                      onClick={() => copyText(executed, "Copiado (inteiro).")}
+                      className="w-full sm:w-auto px-3 py-2 rounded-xl text-[11px] font-black transition flex items-center justify-center gap-2 border"
                       style={{
                         background:
                           "color-mix(in srgb, var(--bg) 75%, transparent)",
@@ -475,13 +462,13 @@ export default function App() {
                       }}
                       disabled={!executed}
                     >
-                      <Copy size={14} /> INTEIRO
+                      <Copy size={14} /> <span className="truncate">INTEIRO</span>
                     </button>
                   </div>
                 </div>
 
                 <textarea
-                  className="w-full min-h-[420px] rounded-xl px-4 py-4 text-sm outline-none transition resize-y border font-unicode-safe"
+                  className="w-full min-h-[360px] sm:min-h-[420px] rounded-xl px-4 py-4 text-sm outline-none transition resize-y border font-unicode-safe"
                   style={{
                     background:
                       "color-mix(in srgb, var(--bg) 70%, transparent)",
@@ -527,7 +514,7 @@ export default function App() {
 function Badge({ children }: { children: React.ReactNode }) {
   return (
     <span
-      className="text-[10px] font-black px-3 py-1.5 rounded-full border tracking-widest transition"
+      className="text-[10px] font-black px-3 py-1.5 rounded-full border tracking-widest transition whitespace-nowrap"
       style={{
         background:
           "linear-gradient(180deg, color-mix(in srgb, var(--panel) 75%, transparent), color-mix(in srgb, var(--panel) 55%, transparent))",
@@ -545,7 +532,7 @@ function Badge({ children }: { children: React.ReactNode }) {
 function Tag({ children }: { children: React.ReactNode }) {
   return (
     <span
-      className="px-3 py-1.5 rounded-full text-[10px] font-bold border"
+      className="px-3 py-1.5 rounded-full text-[10px] font-bold border whitespace-nowrap"
       style={{
         background: "color-mix(in srgb, var(--bg) 75%, transparent)",
         borderColor: "var(--panelBorder)",

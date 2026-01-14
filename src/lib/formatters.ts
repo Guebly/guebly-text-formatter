@@ -1,8 +1,17 @@
+// src/lib/formatters.ts
 /**
- * Guebly Text Formatter
- * - LinkedIn/Instagram: no real markdown → use Unicode "pseudo bold/italic" + structure
- * - WhatsApp: supports *bold* and _italic_
+ * Guebly Text Formatter (robust rewrite)
+ *
+ * Goals:
+ * - Keep "ChatGPT-style" Markdown semantics.
+ * - Convert to platform dialects safely (no regex chaos that breaks bullets/emphasis).
+ *
+ * Platforms:
+ * - LinkedIn / Instagram: no real Markdown → use Unicode pseudo-bold/italic + clean structure
+ * - WhatsApp: supports *bold* and _italic_ (and we keep lists readable)
  */
+
+type ProtectedChunk = { key: string; value: string };
 
 const mapNormal =
   "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
@@ -15,123 +24,290 @@ const mapItalic =
   "𝘢𝘣𝘤𝘥𝘦𝘧𝘨𝘩𝘪𝘫𝘬𝘭𝘮𝘯𝘰𝘱𝘲𝘳𝘴𝘵𝘶𝘷𝘸𝘹𝘺𝘻" +
   "0123456789";
 
-function toMapped(input: string, to: string) {
-  const out: string[] = [];
-  for (const ch of input) {
-    const idx = mapNormal.indexOf(ch);
-    out.push(idx >= 0 ? to[idx] : ch);
-  }
-  return out.join("");
+function unicodeMapChar(ch: string, map: string) {
+  const idx = mapNormal.indexOf(ch);
+  return idx >= 0 ? map[idx] : ch;
 }
 
-export function boldUnicode(s: string) {
-  return toMapped(s, mapBold);
+function boldUnicode(s: string) {
+  return Array.from(s).map((c) => unicodeMapChar(c, mapBold)).join("");
+}
+function italicUnicode(s: string) {
+  return Array.from(s).map((c) => unicodeMapChar(c, mapItalic)).join("");
 }
 
-export function italicUnicode(s: string) {
-  return toMapped(s, mapItalic);
+function normalize(text: string) {
+  return (text ?? "").replace(/\r\n?/g, "\n");
 }
 
-function stripMarkdownDecorations(s: string) {
-  // keep content, remove markers where needed
-  return s.replace(/`{1,3}([^`]+?)`{1,3}/g, "$1");
-}
-
-function mdToWhatsApp(text: string) {
-  // **bold** -> *bold*
-  // *italic* -> _italic_ (avoid converting list bullets)
+/**
+ * Protect code blocks and inline code to avoid breaking emphasis markers inside code.
+ */
+function protectCode(text: string) {
+  const chunks: ProtectedChunk[] = [];
   let out = text;
 
-  out = out.replace(/\*\*([^*]+?)\*\*/g, "*$1*");
-  // single *italic* to _italic_ (but ignore bullets like "- * item")
-  out = out.replace(/(^|[^*])\*([^*\n]+?)\*(?!\*)/g, "$1_$2_");
+  // fenced code blocks
+  out = out.replace(/```[\s\S]*?```/g, (m) => {
+    const key = `⟦CODEBLOCK_${chunks.length}⟧`;
+    chunks.push({ key, value: m });
+    return key;
+  });
 
-  // headings: # -> uppercase line
-  out = out.replace(/^#{1,6}\s+(.*)$/gm, (_m, g1) => g1.toUpperCase());
+  // inline code
+  out = out.replace(/`[^`\n]+`/g, (m) => {
+    const key = `⟦CODE_${chunks.length}⟧`;
+    chunks.push({ key, value: m });
+    return key;
+  });
 
-  // blockquote: > -> prefix
-  out = out.replace(/^>\s?/gm, "“").replace(/$/gm, "");
+  return { out, chunks };
+}
+
+function restoreProtected(text: string, chunks: ProtectedChunk[]) {
+  let out = text;
+  for (const c of chunks) out = out.replaceAll(c.key, c.value);
   return out;
 }
 
-function mdToUnicode(text: string) {
-  let out = stripMarkdownDecorations(text);
+/**
+ * Convert Markdown links: [text](url) → text (url)
+ * Keep raw URLs as-is.
+ */
+function mdLinksToPlain(text: string) {
+  return text.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_m, t, u) => {
+    return `${t} (${u})`;
+  });
+}
 
-  // headings: # -> bold unicode and spacing
-  out = out.replace(/^#{1,6}\s+(.*)$/gm, (_m, g1) => boldUnicode(g1));
+/**
+ * Convert markdown tables to readable text:
+ * | Campo | Valor |
+ * | --- | --- |
+ * | X | Y |
+ * →
+ * Campo: X
+ * Valor: Y
+ */
+function mdTablesToPlain(text: string) {
+  const lines = text.split("\n");
+  const out: string[] = [];
 
-  // **bold**
-  out = out.replace(/\*\*([^*]+?)\*\*/g, (_m, g1) => boldUnicode(g1));
-
-  // *italic*
-  out = out.replace(/(^|[^*])\*([^*\n]+?)\*(?!\*)/g, (_m, p1, g1) => `${p1}${italicUnicode(g1)}`);
-
-  // tables -> "Campo: valor" (very simple)
-  out = out.replace(/\n\|(.+?)\|\n\|([\s\S]+?)\|\n(?=\n|$)/g, (m) => m); // keep if complex
-
-  // Convert markdown tables line-by-line (simple)
-  const lines = out.split("\n");
-  const res: string[] = [];
   let i = 0;
   while (i < lines.length) {
     const line = lines[i];
-    const isTableHeader = /^\|.*\|$/.test(line) && i + 1 < lines.length && /^\|\s*[-:]+/.test(lines[i + 1] || "");
-    if (!isTableHeader) {
-      res.push(line);
-      i++;
+    const isHeader = /^\|.*\|$/.test(line);
+    const next = lines[i + 1] ?? "";
+    const isSep = /^\|\s*[:\- ]+\|/.test(next);
+
+    if (!isHeader || !isSep) {
+      out.push(line);
+      i += 1;
       continue;
     }
-    const headers = line.split("|").map(s => s.trim()).filter(Boolean);
-    i += 2; // skip separator
+
+    const headers = line
+      .trim()
+      .slice(1, -1)
+      .split("|")
+      .map((s) => s.trim());
+
+    i += 2; // skip header + sep
+
+    const rows: string[][] = [];
     while (i < lines.length && /^\|.*\|$/.test(lines[i])) {
-      const row = lines[i].split("|").map(s => s.trim()).filter(Boolean);
-      // "Campo: valor" pairs
-      for (let c = 0; c < Math.min(headers.length, row.length); c++) {
-        res.push(`• ${boldUnicode(headers[c])}: ${row[c]}`);
+      const cells = lines[i]
+        .trim()
+        .slice(1, -1)
+        .split("|")
+        .map((s) => s.trim());
+      rows.push(cells);
+      i += 1;
+    }
+
+    if (!rows.length) {
+      out.push("");
+      continue;
+    }
+
+    for (let r = 0; r < rows.length; r++) {
+      const cells = rows[r];
+      for (let c = 0; c < headers.length; c++) {
+        const h = headers[c] ?? `Coluna ${c + 1}`;
+        const v = (cells[c] ?? "").trim();
+        if (!h && !v) continue;
+        out.push(`${h}: ${v}`);
       }
-      res.push("");
-      i++;
+      if (r !== rows.length - 1) out.push("");
     }
   }
 
-  return res.join("\n").replace(/\n{3,}/g, "\n\n");
+  return out.join("\n");
 }
 
-export function formatForLinkedIn(text: string) {
-  return mdToUnicode(text).trim();
-}
-export function formatForInstagram(text: string) {
-  // Similar to LinkedIn
-  return mdToUnicode(text).trim();
-}
-export function formatForWhatsApp(text: string) {
-  return mdToWhatsApp(text).trim();
+/**
+ * Clean up some ChatGPT markdown noise without destroying meaning.
+ */
+function cleanupMarkdown(text: string) {
+  let out = text;
+
+  // separators
+  out = out.replace(/^\s*---+\s*$/gm, "────────────");
+
+  // blockquotes (remove leading > )
+  out = out.replace(/^\s*>\s?/gm, "");
+
+  // links + tables
+  out = mdLinksToPlain(out);
+  out = mdTablesToPlain(out);
+
+  return out;
 }
 
+/**
+ * Convert list markers at line starts to a consistent bullet.
+ */
+function normalizeBullets(text: string, bullet = "•") {
+  return text.replace(
+    /^(\s*)(?:[-+*]|\d+[.)])\s+/gm,
+    (_m, indent) => `${indent}${bullet} `
+  );
+}
+
+/**
+ * WhatsApp:
+ * - **bold** -> *bold*
+ * - _italic_ stays
+ * - *italic* -> _italic_ (but avoids breaking bullets)
+ */
+function toWhatsApp(text: string) {
+  const protectedRes = protectCode(text);
+  let out = protectedRes.out;
+
+  // headings -> bold line
+  out = out.replace(/^#{1,6}\s+(.*)$/gm, (_m, t) => `*${t.trim()}*`);
+
+  // bold
+  out = out.replace(/\*\*([^*\n]+?)\*\*/g, (_m, g1) => `*${g1}*`);
+
+  // *italic* -> _italic_ (line-safe)
+  out = out
+    .split("\n")
+    .map((line) =>
+      line.replace(/(^|[^*])\*([^*\n]+?)\*(?!\*)/g, (_m, p1, g1) => {
+        return `${p1}_${g1}_`;
+      })
+    )
+    .join("\n");
+
+  // bullets readable
+  out = normalizeBullets(out, "•");
+
+  // tidy
+  out = out.replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+
+  out = restoreProtected(out, protectedRes.chunks);
+  return out;
+}
+
+/**
+ * LinkedIn/Instagram: convert emphasis to Unicode pseudo styles.
+ */
+function toUnicodeSocial(text: string) {
+  const protectedRes = protectCode(text);
+  let out = protectedRes.out;
+
+  out = out.replace(/^#{1,6}\s+(.*)$/gm, (_m, t) => boldUnicode(t.trim()));
+  out = out.replace(/\*\*([^*\n]+?)\*\*/g, (_m, g1) => boldUnicode(g1));
+
+  // underscore italic
+  out = out.replace(
+    /(^|[\s([{"'“‘>])_([^_\n]+?)_(?=[\s)\]}.,!?;:'"”’]|$)/g,
+    (_m, p1, g1) => `${p1}${italicUnicode(g1)}`
+  );
+
+  // asterisk italic
+  out = out
+    .split("\n")
+    .map((line) =>
+      line.replace(
+        /(^|[^*])\*([^*\n]+?)\*(?!\*)/g,
+        (_m, p1, g1) => `${p1}${italicUnicode(g1)}`
+      )
+    )
+    .join("\n");
+
+  out = normalizeBullets(out, "•");
+  out = out.replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+
+  out = restoreProtected(out, protectedRes.chunks);
+  return out;
+}
+
+export function formatForWhatsApp(input: string) {
+  const text = cleanupMarkdown(normalize(input));
+  return toWhatsApp(text);
+}
+
+export function formatForLinkedIn(input: string) {
+  const text = cleanupMarkdown(normalize(input));
+  return toUnicodeSocial(text);
+}
+
+export function formatForInstagram(input: string) {
+  const text = cleanupMarkdown(normalize(input));
+  return toUnicodeSocial(text);
+}
+
+/**
+ * Split text into chunks by max length, preserving paragraph boundaries.
+ */
 export function splitByMaxLen(text: string, maxLen: number) {
-  if (!text) return [""];
+  const t = normalize(text).trim();
+  if (!t) return [""];
+  if (maxLen <= 0) return [t];
+
+  const blocks = t.split(/\n{2,}/g).map((b) => b.trim()).filter(Boolean);
   const chunks: string[] = [];
   let cur = "";
-  const parts = text.split(/\n\n+/);
-  for (const p of parts) {
-    const block = (p + "\n\n");
-    if ((cur + block).length <= maxLen) {
-      cur += block;
+
+  const pushCur = () => {
+    if (cur.trim()) chunks.push(cur.trimEnd());
+    cur = "";
+  };
+
+  for (const block of blocks) {
+    if (!cur) {
+      if (block.length <= maxLen) {
+        cur = block;
+      } else {
+        let s = block;
+        while (s.length > maxLen) {
+          chunks.push(s.slice(0, maxLen));
+          s = s.slice(maxLen);
+        }
+        cur = s;
+      }
       continue;
     }
-    if (cur.trim()) chunks.push(cur.trimEnd());
-    if (block.length <= maxLen) {
-      cur = block;
+
+    if (cur.length + 2 + block.length <= maxLen) {
+      cur += `\n\n${block}`;
     } else {
-      // hard split
-      let s = block;
-      while (s.length > maxLen) {
-        chunks.push(s.slice(0, maxLen));
-        s = s.slice(maxLen);
+      pushCur();
+      if (block.length <= maxLen) {
+        cur = block;
+      } else {
+        let s = block;
+        while (s.length > maxLen) {
+          chunks.push(s.slice(0, maxLen));
+          s = s.slice(maxLen);
+        }
+        cur = s;
       }
-      cur = s;
     }
   }
-  if (cur.trim()) chunks.push(cur.trimEnd());
-  return chunks.length ? chunks : [text];
+
+  pushCur();
+  return chunks.length ? chunks : [t];
 }
